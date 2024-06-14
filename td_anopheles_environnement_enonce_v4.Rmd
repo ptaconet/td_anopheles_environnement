@@ -1,0 +1,490 @@
+---
+title: "TD SIG niveau avancé - Modélisation des dynamiques spatio-temporelles des abondances des vecteurs du paludisme en Côte d'Ivoire avec le langage de programmation R"
+author: | 
+  | Paul Taconet, IRD
+date: "Janvier 2023 - Révison Juin 2024"
+output: 
+  rmarkdown::html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: yes
+    includes:  
+      in_header: my_header.tex
+header-includes:
+    - \usepackage{color}
+    - \usepackage{framed}
+    - \usepackage{tcolorbox}
+urlcolor: blue
+toc-title: "Table des matières"
+---
+
+```{r setup_pdf, eval=knitr::is_latex_output(), include=FALSE}
+library(formatR)
+knitr::opts_chunk$set(echo=T,out.width = "100%", eval = T, message = F, warning = F, tidy.opts = list(width.cutoff = 60), tidy = TRUE)
+options(tinytex.verbose = TRUE)
+```
+
+```{r setup_html, eval=knitr::is_html_output(), include=FALSE}
+knitr::opts_chunk$set(echo=T,out.width = "100%", eval = T, message = F, warning = F)
+options(tinytex.verbose = TRUE)
+```
+
+\setlength{\fboxsep}{.8em}
+
+
+\newtcolorbox{blackbox}{
+  colframe=orange,
+  coltext=black,
+  boxsep=5pt,
+  arc=4pt}
+  
+<!-- set up emoticon. images must be stored in the folder of the project -->
+\newcommand\emotarget{\raisebox{-.4ex}{\protect\includegraphics[height=2.5ex]{emo_target.png}}}
+\newcommand\emotask{\raisebox{-.4ex}{\protect\includegraphics[height=2.5ex]{emo_task.png}}}
+\newcommand\emotrophy{\raisebox{-.4ex}{\protect\includegraphics[height=2.5ex]{emo_trophy.png}}}
+\newcommand\emodevil{\raisebox{-.4ex}{\protect\includegraphics[height=2.5ex]{emo_devil.png}}}
+\newcommand\emoselect{\raisebox{-.4ex}{\protect\includegraphics[height=2.5ex]{selection.png}}}
+\newcommand\emoindice{\raisebox{-.4ex}{\protect\includegraphics[height=2.5ex]{emo_indice.png}}}
+
+\pagebreak
+
+# Introduction
+
+## Objectifs pédagogiques de l'exercice
+
+Ce document est un exercice à destination de personnes souhaitant approfondir leurs connaissances en manipulation de données spatiales et spatio-temporelles sur R, ainsi qu'en modélisation statistique. Nous abordons des notions avancées de SIG (manipulation de données d'occupation du sol, extraction de séries spatio-temporelles au format NetCDF, modélisation spatiale) à travers un cas d'étude lié à la santé publique : la modélisation des dynamiques spatio-temporelles des abondances des vecteurs du paludisme en fonction des conditions environnementales. Notre zone d'étude est la région de Korhogo, située au nord de la Côte d'Ivoire. 
+
+Cet exercice requiert le logiciel R. Après une rapide présentation du cas d'étude théorique, nous présentons les données utilisées dans l'exercice, puis nous déroulons l'exercice. Afin de contrôler le bon avancement du tutoriel, des questions sont régulièrement posées tout au long de l'exercice. Les réponses sont disponibles en fin de document.\
+
+**Prérequis pour aborder sereinement le document** : Connaissances en SIG, connaissances de base dans le langage de programmation R
+
+**Notions et concepts techniques abordés** : extraction de données spatio-temporelles, séries spatio-temporelles issues d'images d'observation de la Terre, NetCDF, modélisation statistique
+
+**Nota bene** : le code R présenté dans ce document n'est pas toujours nécessairement optimisé en terme de performances. A l'image du document dans son ensemble, il a une vocation avant tout pédagogique. 
+
+\pagebreak
+
+## Présentation du contexte et des données entomologiques
+
+### Contexte
+
+L'objectif principal de l'exercice est de modéliser l'abondance spatio-temporelle de vecteurs du paludisme en fonction des conditions environnementales paysagères et météorologiques - autrement dit, d'identifier les déterminants environnementaux de la présence et de l’abondance des vecteurs et de prédire les abondances en fonction de ces mêmes conditions environnementales. 
+
+Les conditions météorologiques (températures, précipitations) et paysagères (utilisation, occupation du sol), impactent de nombreux traits de vie des vecteurs : émergeance, croissance, survie, dispersion, activité, etc. Par exemple, la température affecte le moustique, à chaque étape de son cycle de vie (croissance larvaire, survie des adultes, etc.). De leur côté, les précipitations remplissent ou créent les gites larvaires et expliquent ainsi, en partie, la saisonnalité de l'abondance de certaines espèces d'anophèles. La fréquence des précipitation, leur abondance, leur durée, sont donc des paramètres essentiels pour expliquer les densités des vecteurs.\
+
+Comprendre de quelle manière l’environnement impacte la distribution et la densité des anophèles, et être en mesure de prédire ces densités dans l'espace et dans le temps, peut *in fine* aider à concevoir et déployer des interventions de lutte anti-vectorielle. 
+
+
+### Source des données
+
+L'exercice proposé utilise des données de terrain collectées dans le cadre du projet *REACT : Gestion de la résistance aux insecticides au Burkina Faso et en Côte d’Ivoire : recherche sur les stratégies de lutte anti-vectorielle*, mené en partenariat entre l'Institut de Recherche pour le Développement (IRD, France), l'Institut de Recherche en Sciences de la Santé (IRSS, Burkina Faso) et l'Institut Pierre Richet (IPR, Côte d'Ivoire). Ce projet était financé par L'Initiative 5% (Expertise France). L'objectif principal de ce projet, dont la phase de terrain s'est déroulée entre les années 2016 et 2018, était d'évaluer l'impact de l'utilisation de mesures de lutte anti-vectorielles complémentaires à la moustiquaire impregnée d'insecticide, sur la transmission et l'épidémiologie du paludisme à travers un essai randomisé contrôlé (ERC). A cette fin, deux zones d'études ont été séléctionnées dans deux pays d'Afrique de l'ouest : le Burkina Faso (BF) et la Côte d'Ivoire (CI). Ces deux pays sont situés en zone endémiques du paludisme à *P. falciparum*.\
+
+Chaque zone d'étude du projet REACT couvre environ la surface d'un district sanitaire rural ouest-africain (~2500 km²). Il s'agit de zones principalement rurales. Pour le projet REACT, un total de 55 villages (27 au Burkina Faso, 28 en Côte d'Ivoire) a été séléctionné au sein de ces zones pour mener l'ERC selon les critères suivants : accessibilité pendant la saison des pluies, 200 à 500 habitants par village, et distance entre les villages supérieure à 2 km. La figure 1 présente la localisation géographique des zones et des villages séléctionnés ; ainsi que le chronogramme de collectes de données effectuées dans le cadre du projet REACT. 
+
+```{r study-areas, fig.cap="Projet REACT : zones d'étude, villages et dates de collectes des données", fig.scap="Zones d'étude et villages du projet REACT", out.width="0.9\\linewidth", fig.align="center", echo=F}
+knitr::include_graphics(path = "images/carte_zones_react.jpg")
+```
+
+Dans cet exercice, nous allons nous focaliser sur la zone Ivoirienne du projet REACT. Cette zone couvre la région de Korhogo, au nord du pays, en région bioclimatique soudanienne. Le climat y est caractérisé par une saison sèche d'octobre à avril (incluant une période 'froide' de décembre à février et une période 'chaude' de mars à avril) et une saison pluvieuse de mai à septembre. La végétation naturelle est dominée par la savane arborée parsemée de forêts ripicoles.
+
+Dans le cadre du projet REACT, plusieurs enquêtes entomologiques ont été effectuées dans chaque village au cours des 2 années du projet. Les moustiques ont été collectés en utilisant la technique de la capture sur sujet humain, de 17h00 à 09h00. Les anophèles ont ensuite été identifiés à l'espèce. Sur la zone ivoirienne, deux espèces/genres d'anophèles principales ont été identifiées : *An. gambiae s.l.* et *An. funestus*. Dans cet exercice, afin de faciliter les traitements, nous allons conserver et nous focaliser sur un seule genre : *An. gambiae s.l.*.
+
+L'exercice consiste, en partant d'un simple tableau contenant le nombre de moustiques collectés ainsi que les coordonnées géographiques et les dates de de collecte, à : 
+
+- Identifier et collecter des données météorologiques et paysagères dans la région et aux dates de collecte, puis constituer des variables statistiques pertinentes à partir de ces données,
+- Générer des **modèles descriptifs** (ou exploratoires) de l'abondance des moustiques,
+- Générer des **modèles explicatifs** de l'abondance des moustiques,
+- Générer des **modèles prédictifs** de l'abondance des moustiques.
+
+C'est parti ! 
+
+\pagebreak
+
+# Importer et préparer les données pour la modélisation
+
+## Importer et préparer les données entomologiques
+
+Le tableau contenant le nombre de moustiques collectés ainsi que les coordonnées géographiques et les dates de de collecte est disponible sous `entomological_data.csv`. Ouvrons le sous R :
+
+```{r eval=T}
+entomological_data <- read.csv("data/CI/entomological_data.csv")
+
+head(entomological_data)
+```
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask Décrivez la table en une ou deux phrases simples (granulométrie des données, type d'informations qui y sont disponibles, etc.) .\
+
+\emotask Créez un histogramme des abondances d'anophèles capturés (indice : utilisez la fonction `hist()` sur la bonne colonne de la table `entomological_data`).
+
+::::
+
+La première étape du travail consiste à convertir cet objet (`data.frame`) au format `sf`. `sf` est la librairie R de référence pour manipuler des données géographiques vectorielles (points, lignes, polygones) sur R.
+
+```{r eval=T}
+library(sf)
+library(dplyr)
+
+entomological_data <- entomological_data %>%
+  st_as_sf(coords = c("X", "Y"), crs = 4326) %>% # conversion au format sf
+  mutate(date = as.Date(date)) # transformation de la colonne Date au type Date 
+
+entomological_data
+```
+
+BONUS (facultatif) : Nous pouvons facilement cartographier les points de collecte de moustiques à l'aide la librairie `mapview` :
+
+```{r, eval=knitr::is_html_output(), fig.height=5, fig.width=3}
+library(mapview)
+
+mapview(entomological_data,legend=F)
+```
+
+## Importer et préparer les données météorologiques
+
+Dans des régions où les stations météorologiques sont rares (comme c'est le cas dans les milieux ruraux ouest-africains), les images satellitaires sont une source précieuse de données météo. Il existe de très nombreuses sources de données météorologiques satellitaires. Pour cet exercice, nous allons utiliser des données satellitaires produites par la NASA : des données de température de surface recueillies par l'instrument [MODIS](https://modis.gsfc.nasa.gov/) embarqué à bord du satellite Terra de la NASA, et des données de précipitations produites par la mission [*Global Precipitation Measurement*](https://gpm.nasa.gov/data). 
+
+En particulier, nous allons utiliser les collections suivantes :
+
+- la collection [MOD11A2.061](https://doi.org/10.5067/MODIS/MOD11A2.061) : Température de surface. Couverture : mondiale ; résolution spatiale : 1 km ; résolution temporelle : 8 jours
+- la collection [GPM_3IMERGDF.07](https://doi.org/10.5067/GPM/IMERGDF/DAY/07) : Précipitations. résolution spatiale : 0.1° (~10 km) ; résolution temporelle : 1 jour
+
+### Importer les données
+
+Il existe de nombreux moyens d'accéder à ces données météorologiques satellitaires. Pour cet exercice, nous allons y accéder en utilisant la libraire R [`modisfast`](https://github.com/ptaconet/modisfast). `modisfast` est une librairie qui permet de télécharger les données MODIS et plusieurs autres sources de données d'observation de la Terre d'une manière efficace et rapide : en les échantillonnant lors de la phase de téléchargement (spatialement, temporellement et dimensionnellement) grâce au protocole [OPeNDAP](https://www.opendap.org/about). 
+
+`modisfast` requiert comme paramètres : 
+
+- une collection de données d'intérêt
+- une ou plusieurs bandes d'intérêt pour cette collection 
+- une zone géographique d'intérêt de type `sf` POLYGONE
+- une période de temps d'intérêt (borne temporelle inférieure et supérieure)
+
+Dans le cadre de cet exercice, nos collections et bandes d'intérêt sont les suivantes :
+
+- collection "MOD11A2.061", bandes "LST_Day_1km" et "LST_Night_1km"
+- collection "GPM_3IMERGDF.07", bande "precipitation"
+
+La zone géographique et les dates d'intérêts doivent couvrir un peu plus large que l'ensemble des points et des dates de collecte (vous comprendrez pourquoi par la suite). Nous allons donc générer une région d'intérêt couvrant les points de collecte, puis nous allons élargir un peu cette région (de 3 km dans toutes les directions). De même, nous allons générer des dates d'intérêt couvrant les dates de collecte, puis nous allons élargir un peu ces dates (de 30 jours avant la première collecte). 
+
+Pour la région d'intérêt : 
+
+```{r eval=T}
+
+# calculons les coordonnées (N, S, E, O) délimitant les points de collecte
+roi <- sf::st_bbox(entomological_data)
+
+# Etendons la région. Pour cela, utilisons la function expand_bbox() qui permet d'étendre 
+# la zone d'intérêt d'une distance donnée dans les directions N-S et E-W 
+# (merci à @Chrisjb pour cette fonction)
+source("https://raw.githubusercontent.com/Chrisjb/basemapR/master/R/expand_bbox.R")
+roi <- roi %>%
+  expand_bbox(.,3000,3000) %>% # 3000 m dans toutes les directions
+  sf::st_as_sfc() %>%
+  sf::st_sf() 
+
+# Enfin, donnons un nom à la zone d'intérêt
+roi$id = "korhogo"
+
+roi
+
+```
+
+et pour les dates d'intérêt : 
+
+```{r eval=T}
+# Créons un vecteur de 2 dates, contenant la date minimale (30 jours avant la 1ere collecte) et la date maximale (date de la dernière collecte)
+time_range <- c(min(entomological_data$date) - 30, max(entomological_data$date))
+
+time_range
+```
+
+Nous avons à présent défini l'ensemble des paramètres nécessaires pour télécharger les données météorologiques avec la librairie `modisfast`. Procédons donc au téléchargement :
+
+*Note 1:  Pour pouvoir accéder à ces données, il faut créer un compte utilisateur Earthdata ici : https://urs.earthdata.nasa.gov/*
+
+*Note 2 : si vous rencontrez des problèmes pour télécharger ces données, elles sont disponibles dans le dossier 'data/meteorological_data'.*
+
+```{r eval=F}
+
+library(modisfast)
+
+# Insérer votre nom d'utilisateur et mot de passe Earthdata dans la fonction suivante :
+log <- modisfast::mf_login(credentials = c(Sys.getenv("earthdata_un"),Sys.getenv("earthdata_pw")))
+
+# Les fonctions suivantes génèrent les URLs pour télécharger les données :
+urls_mod11a2 <- modisfast::mf_get_url(
+  collection = "MOD11A2.061",
+  variables = c("LST_Day_1km","LST_Night_1km"),
+  roi = roi,
+  time_range = time_range)
+
+urls_gpm <- modisfast::mf_get_url(
+  collection = "GPM_3IMERGDF.07",
+  variables = c("precipitation"), 
+  roi = roi,
+  time_range = time_range)
+
+# Les fonctions suivantes téléchargent les données en local, dans le dossier 'data/meteorological_data' :
+res_dl_modis <- modisfast::mf_download_data(urls_mod11a2, path = "data/meteorological_data")
+res_dl_gpm <- modisfast::mf_download_data(urls_gpm, path = "data/meteorological_data")
+
+```
+
+Les données météorologiques sont à présent téléchargées ! Importons les et visualisons les dans R. Pour cela, nous allons utiliser la librairie `terra`. Si `sf` fait référence pour la manipulation de données vectorisées, `terra` fait référence pour la manipulation des données rastérisées (mais il en existe de nombreuses autres : `stars`, `ncdf4`, etc.).
+
+```{r eval=T}
+
+library(terra)
+
+# Importons les données MODIS au format SpatRast à l'aide de la fonction 'mf_import_data' de la librairie modisfast :
+modis_ts <- modisfast::mf_import_data(path = "data/meteorological_data/korhogo/MOD11A2.061", 
+                           collection_source = "MODIS")
+
+# De même pour les données GPM :
+gpm_ts <- modisfast::mf_import_data(path = "data/meteorological_data/korhogo/GPM_3IMERGDF.07", 
+                         collection_source = "GPM")
+
+
+terra::plot(modis_ts)
+terra::plot(gpm_ts)
+
+modis_ts
+gpm_ts
+
+```
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask Identifiez les informations suivantes concernant la série temporelle MODIS LST :
+
+- système de projection et de coordonnées
+- nombre et noms des attributs
+- nombre total de "couches" temporelles 
+- dates minimum et maximum de la série temporelle
+- unités des températures\
+
+\emotask Sur le plot de l'ensemble des couches temporelles, à quoi correspondent les carrés blancs (sans couleur) ?
+
+::::
+
+### Construire les variables statistiques
+
+Nos données météorologiques sont à présent disponibles. Pour constituer des modèles statistiques à partir de ces données, il faut en extraire des variables à "rattacher" aux tableau des données entomologiques. L'enjeu est de contruire des variables pertinentes au regard des connaissances sur l'impact des conditions météorologiques sur les moustiques.
+
+Les conditions météorologiques telles que les températures et les précipitations impactent de nombreux traits de vie des vecteurs : émergeance, croissance, survie, dispersion, activité, etc. Par exemple, la température affecte le moustique, à chaque étape de son cycle de vie (croissance larvaire, survie des adultes, etc.). De leur côté, les précipitations remplissent ou créent les gites larvaires et expliquent ainsi, en partie, la saisonnalité de l'abondance de certaines espèces d'anophèles. La fréquence des précipitation, leur abondance, leur durée, sont donc des paramètres essentiels pour expliquer les densités des vecteurs.
+
+Pour cet exercice, nous allons donc créer les variables suivantes : 
+
+- températures minimum et maximum moyennes sur le mois précedent chaque collecte (1 mois = ~ durée de vie d'un anophele sur le terrain), dans une zone d'un rayon de 2 km autour des points de capture (2 km = ~ distance de vol maximum d'un anophele sur le terrain)
+- cumul des précipitations selon ces mêmes paramètres
+
+Ci-dessous, nous proposons un code pour réaliser ces opérations :
+
+```{r eval=T}
+# créer une zone tampon d'un rayon de 2 km autour de chaque point de collecte
+sp_buffer <- st_buffer(entomological_data, 2000) 
+
+#mapview(list(roi, entomological_data, sp_buffer),legend=F)
+
+# écrire une fonction qui créer les variables statistiques, donnés en entrée : 
+# - une zone tampon (dans laquelle les données seront résumées),
+# - une série temporelle de type SpatRaster, 
+# - une bande d'intérêt pour cette SpatRaster, 
+# - un intervalle de temps d'intérêt
+# - une fonction pour résumer les données pour la période considérée
+
+fun_get_zonal_stat <- function(sp_buffer, raster_ts, variable, min_date, max_date, fun_summarize){
+  
+  r_sub <- terra::subset(raster_ts, terra::time(raster_ts) >= min_date & terra::time(raster_ts) <= max_date)
+  r_agg <- terra::app(r_sub[variable], fun_summarize, na.rm = T)
+  val <- terra::extract(r_agg, sp_buffer, fun = mean, ID = F, touches=TRUE, na.rm = T)
+  val <- as.numeric(val)
+  
+  return(val)
+}
+
+# diviser l'ensemble de données (nécessaire pour l'exécution de la fonction)
+sp_buffer_split <- split(sp_buffer, seq(nrow(sp_buffer))) 
+
+# exécuter la fonction pour obtenir les variables météorologiques souhaités
+LSTmax_1_month_bef <- purrr::map_dbl(sp_buffer_split, ~fun_get_zonal_stat(., modis_ts, "LST_Day_1km", .$date - 30, .$date, "mean"))
+LSTmin_1_month_bef <- purrr::map_dbl(sp_buffer_split, ~fun_get_zonal_stat(., modis_ts, "LST_Night_1km", .$date - 30, .$date, "mean"))
+rain_1_month_bef <- purrr::map_dbl(sp_buffer_split, ~fun_get_zonal_stat(., gpm_ts, "precipitation", .$date - 30, .$date, "sum"))
+
+# rattacher ces variables au tableau 'entomological_data'
+entomological_data$LSTmax_1_month_bef <- LSTmax_1_month_bef - 273.15  # le - 273.15 sert à convertir la température de Kelvin en °C
+entomological_data$LSTmin_1_month_bef <- LSTmin_1_month_bef - 273.15
+entomological_data$rain_1_month_bef <- rain_1_month_bef
+
+head(entomological_data)
+```
+
+Nos variables météorologiques sont prêtes ! Place au traitement des données paysagères. 
+
+## Importer et préparer les données paysagères
+
+Pour les données paysagères, nous allons utiliser une carte d'occupation du sol. Il existe de nombreuses cartes d'occupation du sol en libre accès, à des résolution spatiales qui diffèrent. Ici, nous allons utiliser une carte d'occupation du sol à l'échelle du continent africain produite par l'Agence Spatiale Européenne en 2016 à partir d'images satellitaires Sentinel 2. La produit est libre et accessible à l'adresse suivante : https://2016africalandcover20m.esrin.esa.int/viewer.php. 
+
+### Importer les données
+
+Comme la carte à l'échelle de l'Afrique entière est très volumineuse (plus de 5 GB), nous l'avons téléchargée en amont de ce TD et pré-découpée sur notre zone d'étude. La carte est ainsi disponible dans le dossier `data/landscape_data/landcover.tif`. 
+
+Chargeons la dans R à l'aide de la librairie R `terra` :
+
+```{r, eval=T}
+# importer les données d'occupation du sol 
+raster_lulc <- terra::rast("data/landscape_data/landcover.tif")
+
+raster_lulc
+
+terra::plot(raster_lulc)
+
+```
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask Identifiez les informations suivantes concernant le raster d'occupation des sols :
+
+- résolution spatiale précise
+- système de projection et de coordonnées
+- nombre total de pixels
+
+::::
+
+Pour l'instant, nous ne savons pas à quelle classe d'occupation du sol correspondent les valeurs des pixels. Ces informations se trouvent dans le fichier disponible sous `data/landscape_data/landcover_rat.csv`. Chargeons cette table attributaire du raster (*raster attribute table*) afin d'obtenir la signification des pixels :
+
+```{r, eval=T}
+
+rat <- read.csv("data/landscape_data/landcover_rat.csv")
+
+levels(raster_lulc) <- rat
+
+terra::plot(raster_lulc)
+
+```
+
+Enfin, superposons la carte d'occupation des sols et les villages de collecte des anophèles. Pour cela, nous devons convertir le système de coordonnées de la couche géographique des données entomologiques de sorte qu'elle corresponde à celui de la couche d'occupation du sol :
+
+```{r, eval=T}
+
+entomological_data_utm <- sf::st_transform(entomological_data,terra::crs(raster_lulc))
+
+#terra::points(terra::vect(entomological_data_utm), pch=21, col="black", bg="white", cex=1)
+
+```
+
+### Construire les variables statistiques
+
+Comme pour les données météorologiques, il s'agit maintenant de constituer des variables statistiques à partir des données paysagères. Pour ceci, nous allons extraire un certain nombre de métriques paysagères (en anglais : *landscape metrics*) dans des zones tampons autour des points de collecte de moustiques. Il existe, dans l'absolu, un grand nombre de métriques paysagères. Dans cet exercice, nous allons en calculer une simple : le pourcentage de surface utilisé par chaque classe d'occupation du sol dans une zone tampon d'un rayon de 2 km autour de chaque village.
+
+Afin de calculer ces métriques, nous allons utiliser la librairie R `landscapemetrics`.
+
+Ci-dessous, nous proposons un code pour réaliser ces opérations :
+
+```{r,  eval=T}
+
+library(landscapemetrics)
+library(tidyr)
+
+villages <- unique(entomological_data_utm[c("village", "geometry")])
+
+# La fonction qui suit permet de calculer le % de surface utilisé par chaque classe 
+#d'occupation du sol dans une zone tampon d'un rayon de 2 km autour de chaque village.
+# Pour davantage de détail sur la fonction, tapez : help(sample_lsm)
+
+df_lsm <- landscapemetrics::sample_lsm(landscape = raster_lulc,
+                                       y = villages, 
+                                       plot_id = villages$village,
+                                       what = "lsm_c_pland",
+                                       shape = "circle",
+                                       size = 2000,
+                                       verbose = F)
+
+# Afin d'obtenir le nom des classes d'occupation du sol (et pas seulement le numéro des pixels), 
+#joignons la table attributaire du raster
+rat$pixlabel <- gsub(" ","_",rat$pixlabel)
+df_lsm <- dplyr::left_join(df_lsm, rat, by = c("class"="pixval"))
+
+# Passons le tableau des métriques paysagères du format "long" au format "large"
+df_lsm <- df_lsm %>%
+  dplyr::select(value,plot_id,pixlabel) %>%
+  tidyr::pivot_wider(names_from = pixlabel, values_from = value, values_fill = 0)
+
+# Puis joignons les tableaux de capture des anophèles à celui des métriques paysagères
+entomological_data_utm <- dplyr::left_join(entomological_data_utm, df_lsm, by = c("village"="plot_id"))
+entomological_data_utm <- st_drop_geometry(entomological_data_utm)
+
+head(entomological_data_utm)
+```
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask Exprimez en language naturel (i.e. en français) l'information que fournit la première ligne du tableau.
+
+::::
+
+# Modéliser
+
+- Générer des **modèles descriptifs** (ou exploratoires) de l'abondance des moustiques, afin de répondre à la question : **Quels sont les déterminants environnementaux des abondances des moustiques ?**
+- Générer des **modèles explicatifs** de l'abondance des moustiques, afin de répondre à la question : **Quel est l’impact précis de certaines variables environnementales (températures, précipitations) sur les densités agressives ?**
+- Générer des **modèles prédictifs** de l'abondance des moustiques, afin de répondre à la question : **Est-il possible de prédire les abondances des moustiques dans d'autres villages de la zone d'étude grâce aux données environnementales ?**
+
+## Visualiser les données et leurs associations
+
+```{r, eval=T}
+
+library(ggplot2)
+
+entomological_data_utm %>%
+  tidyr::pivot_longer(LSTmax_1_month_bef:Bare_areas, names_to = "variable", values_to = "value") %>% 
+  ggplot(aes(x = value, y = log(n))) + geom_point(size=0.5) + facet_wrap(.~variable, scales = "free") + geom_smooth() + theme_bw()
+
+```
+
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask A votre avis, que représente la courbe bleue sur ces graphiques ?\
+
+\emotask Selon les données, avec quelles variables d'occupation du sol ou de météorologie l'abondance des anophèles est-elle positivement corrélée ? A l'inverse, avec quelles variables est-elle négativement corrélée ?\
+
+\emotask Quelles sont les variables qui ont l'air d'impacter le plus l'abondance des anophèles ?
+
+::::
+
+
+## Modélisation explicative
+
+-> GLMM
+
+## Modélisation exploratoire/descriptive
+
+-> random forest puis IML
+
+## Modélisation prédictive
+
+-> random forest puis évaluation
+
+# Pour aller plus loin 
+
+
+**License**
+
+<a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/"><img alt="Licence Creative Commons" style="border-width:0" src="https://i.creativecommons.org/l/by-nc/4.0/88x31.png" /></a><br />Ce(tte) œuvre est mise à disposition selon les termes de la <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/">Licence Creative Commons Attribution - Pas d’Utilisation Commerciale 4.0 International</a>.
+
+**Citation** 
+
+Paul Taconet. (2023, février 13). TD SIG niveau avancé - Modélisation des dynamiques spatio-temporelles des abondances des vecteurs du paludisme au Burkina Faso avec le langage de programmation R. Zenodo. https://doi.org/10.5281/zenodo.7635937
