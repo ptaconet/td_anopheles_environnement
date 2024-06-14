@@ -14,7 +14,10 @@ Cet exercice requiert le logiciel R. Après une rapide présentation du cas d'é
 
 ## Lien vers la ressource pédagogique 
 
-La ressource pédagogique est disponible à l'adresse suivante : https://doi.org/10.5281/zenodo.7635937
+La ressource pédagogique est disponible aux adresses suivantes : 
+
+- html : https://ptaconet.github.io/td_anopheles_environnement/
+- pdf : https://doi.org/10.5281/zenodo.7635937
 
 ## Citation
 
