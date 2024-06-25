@@ -1,10 +1,10 @@
 ---
-title: "TD SIG niveau avancé - Modélisation des dynamiques spatio-temporelles des abondances des vecteurs du paludisme en Côte d'Ivoire avec le langage de programmation R"
+title: "TD Fouille de données spatio-temporelles - Modélisation des dynamiques spatio-temporelles des abondances des vecteurs du paludisme en Côte d'Ivoire avec le langage de programmation R"
 author: | 
   | Paul Taconet, IRD
 date: "Janvier 2023 - Révison Juin 2024"
 output: 
-  rmarkdown::html_document:
+  rmarkdown::pdf_document:
     toc: true
     toc_depth: 2
     number_sections: true
@@ -194,6 +194,10 @@ roi
 
 ```
 
+```{r, eval=knitr::is_html_output(), fig.height=5, fig.width=3}
+mapview(list(roi,entomological_data),legend=F)
+```
+
 et pour les dates d'intérêt : 
 
 ```{r eval=T}
@@ -249,7 +253,11 @@ modis_ts <- modisfast::mf_import_data(path = "data/meteorological_data/korhogo/M
 gpm_ts <- modisfast::mf_import_data(path = "data/meteorological_data/korhogo/GPM_3IMERGDF.07", 
                          collection_source = "GPM")
 
+```
 
+Visualisons les données ainsi que leur structure : 
+
+```{r eval=T}
 terra::plot(modis_ts)
 terra::plot(gpm_ts)
 
@@ -270,9 +278,10 @@ gpm_ts
 - dates minimum et maximum de la série temporelle
 - unités des températures\
 
-\emotask Sur le plot de l'ensemble des couches temporelles, à quoi correspondent les carrés blancs (sans couleur) ?
+\emotask Sur le plot de la série temporelle MODIS LST, à quoi correspondent les carrés blancs (sans couleur) ? A votre avis, pourquoi n'y a-t-il pas de tels carrés blancs sur le plot de la série temporelle de précipitations ?
 
 ::::
+
 
 ### Construire les variables statistiques
 
@@ -434,21 +443,71 @@ head(entomological_data_utm)
 
 ::::
 
+
 # Modéliser
 
-- Générer des **modèles descriptifs** (ou exploratoires) de l'abondance des moustiques, afin de répondre à la question : **Quels sont les déterminants environnementaux des abondances des moustiques ?**
-- Générer des **modèles explicatifs** de l'abondance des moustiques, afin de répondre à la question : **Quel est l’impact précis de certaines variables environnementales (températures, précipitations) sur les densités agressives ?**
-- Générer des **modèles prédictifs** de l'abondance des moustiques, afin de répondre à la question : **Est-il possible de prédire les abondances des moustiques dans d'autres villages de la zone d'étude grâce aux données environnementales ?**
+Nous avons donc construit un tableau contenant des **variables dépendentes** (aussi appellées 'variables à expliquer' ou 'variables à prédire') et des **variables indépendantes** (aussi appellées 'variables explicatives' ou 'variables prédictives'). Ce tableau va nous permettre de modéliser les abondances des anophèles. 
+
+Mais en fait, qu'est ce que la modélisation statistique, et à quoi sert elle ? Tout un sujet ... mais pour résumer, un modèle statistique est un outil permettant d’associer des données, à savoir des informations mesurables du monde qui nous entoure (ou *observations*). Associer des données peut servir différents enjeux scientifiques : 
+
+- **expliquer** : tester ou vérifier une théorie scientifique,
+- **explorer** : mieux comprendre un phénomène d’intérêt,
+- **prédire** : prédire de nouvelles valeurs d’un évènement. 
+
+Selon l’enjeu poursuivi, l’ensemble du processus de modélisation statistique diffère : choix des variables, choix des modèles, méthodes d'évaluation des modèles, etc. 
+
+Si vous souhaitez en savoir plus sur les enjeux de la modélisation stastique, voici 2 lectures intéressantes : 
+
+- Tredennick, A. T., Hooker, G., Ellner, S. P., & Adler, P. B. (2021). *A practical guide to selecting models for exploration, inference, and prediction in ecology.* In Ecology (Vol. 102, Issue 6). Wiley. https://doi.org/10.1002/ecy.3336 
+- Paul Taconet. *Fouille de données spatio-temporelles pour l’étude du risque de transmission résiduelle du paludisme à échelle paysagère en milieu rural ouest-africain* (Chapitre 2 : *Étude des systèmes complexes et modélisation statistique*). Médecine humaine et pathologie. Université de Montpellier, 2022. Français. https://theses.hal.science/tel-03841709
+
+Dans cet exercice, nous allons générer des modèles de l'abondance des moustiques pour ces 3 enjeux (explicatif, exploratoire, prédictif). L'objectif pédagogique est ici de montrer comment, à partir du tableau que nous avons généré dans la partie précédente, nous pouvons répondre à différentes questions de recherche grâce à la modélisation statistique. Les formes de modélisation et questions de recherche associées sont présentées ci-dessous :
+
+- Modélisation explicative : **Quel est l’impact précis de certaines variables environnementales (températures, précipitations) sur les densités agressives ?**
+- Modélisation exploratoire : **Quels sont les déterminants environnementaux des abondances des moustiques ?**
+- Modélisation prédictive : **Est-il possible de prédire les abondances des moustiques dans d'autres villages de la zone d'étude grâce aux données environnementales ?**
+
+C'est parti ! 
 
 ## Visualiser les données et leurs associations
+
+Quelle que soit l'enjeu et la question de recherche, tout travail de modélisation commence par la visualisation des données sur des graphiques pertinents. 
+
+Ici, nous allons tout d'abord visualiser la distribution statistique de la variable dépendante (l'abondance des moustiques) :
+
+```{r, eval=T}
+
+hist(entomological_data_utm$n)
+
+```
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask Comment qualifieriez-vous cette distribution statistique ? Qu'a-t-elle de particulier ?
+
+::::
+
+Nous allons également visualiser la forme des associations entre la variable dépendante (abondance des moustiques) et l'ensemble des variables indépendantes, grâce des des graphiques en nuage de points. Pour cela, nous utilisons la librairie R `ggplot2` :
 
 ```{r, eval=T}
 
 library(ggplot2)
 
-entomological_data_utm %>%
+viz <- entomological_data_utm %>%
   tidyr::pivot_longer(LSTmax_1_month_bef:Bare_areas, names_to = "variable", values_to = "value") %>% 
-  ggplot(aes(x = value, y = log(n))) + geom_point(size=0.5) + facet_wrap(.~variable, scales = "free") + geom_smooth() + theme_bw()
+  ggplot2::ggplot(aes(x = value, y = n)) + geom_point(size=0.5) + facet_wrap(.~variable, scales = "free") + ylim(c(0,200)) + theme_bw()
+
+viz
+
+```
+
+La nature des relations entre les variables peut être délicate à visualiser sur ce genre de graphique. Ajoutons une courbe de regression qui aidera à visualiser : 
+
+```{r, eval=T}
+
+viz + geom_smooth()
 
 ```
 
@@ -457,33 +516,180 @@ entomological_data_utm %>%
 ::: {data-latex=""}
 :::
 
-\emotask A votre avis, que représente la courbe bleue sur ces graphiques ?\
-
 \emotask Selon les données, avec quelles variables d'occupation du sol ou de météorologie l'abondance des anophèles est-elle positivement corrélée ? A l'inverse, avec quelles variables est-elle négativement corrélée ?\
 
 \emotask Quelles sont les variables qui ont l'air d'impacter le plus l'abondance des anophèles ?
 
 ::::
 
-
 ## Modélisation explicative
 
--> GLMM
+Ici, nous allons utiliser la modélisation statistique afin de répondre à la question suivante : **Quel est l’impact précis de certaines variables environnementales (températures, précipitations) sur les densités agressives ?** Quantifier précisement l'association entre des variables statistques requiert d'utiliser des modèles transparents, qui délivrent des informations chiffrées sur le sens, la force, et la significativité de l'association. Les modèles paramétriques type modèles linéaires sont parfaitement adapatés à ce genre de situations. 
 
-## Modélisation exploratoire/descriptive
+Ici, nous allons donc effectuer une régression linéaire en ajustant un modèle linéaire. Pour cela nous allons utiliser la librairie R `MASS`. 
 
--> random forest puis IML
+Comme la distribution de la variable réponse est binomiale négative, nous utilisons la famille `nbinom2` dans l'argument `family` de la fonction `glmmTMB`.
+
+Ajustons un modèle linéaire entre le nombre d'anophèles collectés et le cumul des précipitations sur le mois précédant la collecte :
+
+```{r, eval=T}
+
+library(glmmTMB)
+
+df_explanatory_model <- entomological_data_utm
+
+mod1 <- glmmTMB(n ~ rain_1_month_bef, data = entomological_data_utm, family = nbinom2)
+summary(mod1)
+
+```
+
+:::: {.blackbox data-latex=""}
+::: {data-latex=""}
+:::
+
+\emotask Exprimez en français les informations que founit le modèle.\
+
+\emotask Générez une regression linéaire avec la variable 'LSTmax_1_month_bef' et la variable 'Cropland' puis interprétez les résultats.
+
+::::
+
+## Modélisation exploratoire
+
+Ici, nous allons utiliser la modélisation statistique afin de répondre à la question suivante : **Quels sont les déterminants environnementaux des abondances des moustiques ?** Pour ce faire, nous avons besoin de modèles capables de capturer de manière autonome des associations complexes entre les variables (non-linéarités, interactions), potentiellement non-hypothétisées. Tout l'intérêt et l'enjeu résidera ensuite dans l'interprétation de ces modèles, afin de révéler les associations qu'ils ont 'apprises' ou capturées. L'interprétation de ces associations, à la lumière des connaissances actuelles, nous permettra d'emettre des hypothèses sur les principaux déterminants environnementaux des abondances des moustiques. Les modèles non-paramétriques de *machine learning* type forêts aléatoires sont adapatés à ce genre de situations.
+
+Le travail de modélisation exploratoire se déroule en deux phases :
+
+- identification et suppression des variables collinéaires (la présence de variables collinéaires dans un modèle multivarié peut fausser les résultats)
+- ajustement d'un modèle de *machine learning*
+- interprétation des associations que le modèle a capturées grâce à des outils d'interprétation de ce modèles (outils dits *interpretable machine learning*).
+
+Trois librairies R seront nécessaires : `randomForest`, `CAST`, `caret` .
+
+```{r, eval=T}
+library(randomForest)
+library(CAST)
+library(caret)
+
+df_exploratory_model <- entomological_data_utm
+
+# définissons les variables indépendantes
+predictors <- colnames(df_exploratory_model[5:ncol(df_exploratory_model)])
+
+# identifions les variables indépendantes qui sont corrélées au dessus de 0.7 (coeff de correlation de pearson) : 
+m <- cor(df_exploratory_model[,predictors], method = "pearson", use = "pairwise.complete.obs")
+index <- which(abs(m) > .7 & abs(m) < 1,arr.ind = T) 
+df_cor <- subset(as.data.frame(index) , row <= col)
+p <- cbind.data.frame(stock1 = rownames(m)[df_cor[,1]], stock2 = colnames(m)[df_cor[,2]])
+
+p
+```
+
+Les trois variables suivantes sont corrélées : Bare_areas / Open_water / Built_up_areas ; et les deux variables suivantes sont corrélées : Trees_cover_areas / Shrubs_cover_areas.
+
+Nous devons retirer certaines de ces variables afin d'ôter le problème de multicollinéarité. 
+
+```{r, eval=T}
+predictors <- setdiff(predictors,c("Shrubs_cover_areas","Bare_areas","Open_water"))
+```
+
+Ajustons à présent le modèle de forêts aléatoires aux données. 
+
+```{r, eval=T}
+indices_cv <- CAST::CreateSpacetimeFolds(df_exploratory_model, spacevar = "village", k = length(unique(df_exploratory_model$village)))
+
+tr = caret::trainControl(method="cv",
+                  index = indices_cv$index, 
+                  indexOut = indices_cv$indexOut,
+                  savePredictions = 'final')
+
+mod <- caret::train(x = df_exploratory_model[,predictors], y = df_exploratory_model$n, method = "rf", tuneLength = 10, trControl = tr, metric = "MAE", maximize = FALSE,  preProcess = c("center","scale"))
+
+```
+
+Enfin, interprétons le modèle à l'aide de deux outils : l'importance des variables et les 'partial dependence plots' : 
+
+```{r, eval=T}
+# Importance des variables
+randomForest::varImpPlot(mod$finalModel, main = "Variable importance plot")
+
+## Partial dependence plot pour la variable 'rain_1_month_bef'
+partialPlot(mod$finalModel, df_exploratory_model, rain_1_month_bef)
+
+```
 
 ## Modélisation prédictive
 
--> random forest puis évaluation
+Ici, nous allons utiliser la modélisation statistique afin de répondre à la question suivante : **Est-il possible de prédire les abondances des moustiques dans d'autres villages de la zone d'étude grâce aux données environnementales ?** Pour ce faire, nous avons besoin de modèles capables de prédire au mieux. Les modèles non-paramétriques de *machine learning* type forêts aléatoires sont, là aussi, comme pour la modélisation exploiratoire, adapatés à ce genre de situations.
+
+La chaine de traitement pour ajuster le modèle ressemble fortement à celle de la modélisation exploratoire, à quelques différences prêts :
+
+- en modélisation prédictive, l'enjeu n'étant pas l'interprétation des modèles, la multicollinéarité n'est pas un problème (sauf si le nombre de variables indépendantes est très important)
+- une fois le modèle généré, l'enjeu ici n'est pas de l'interpréter mais d'évaluer sa puissance prédictive, c'est à dire sa capacité à prédire les abondances des moustiques dans de nouveaux villages ou à de nouvelles dates (i.e. des villages/dates qui n'ont pas servi pour l'entrainement du modèle)
+
+
+Pour commencer, ajustons le modèle de forêts aléatoire en utilisant toutes les variables indépendantes : 
+
+```{r, eval=T}
+
+library(randomForest)
+library(CAST)
+library(caret)
+
+df_predictive_model <- entomological_data_utm
+predictors <- colnames(df_exploratory_model[5:ncol(df_exploratory_model)])
+
+indices_cv <- CAST::CreateSpacetimeFolds(df_predictive_model, spacevar = "village", k = length(unique(df_predictive_model$village)))
+
+tr = caret::trainControl(method="cv",
+                  index = indices_cv$index, 
+                  indexOut = indices_cv$indexOut,
+                  savePredictions = 'final')
+
+mod <- caret::train(x = df_predictive_model[,predictors], y = df_predictive_model$n, method = "rf", tuneLength = 10, trControl = tr, metric = "MAE", maximize = FALSE,  preProcess = c("center","scale"))
+
+```
+
+Evaluons maintenant la puissance prédictive du modèle : 
+
+```{r, eval=T}
+
+df_predictive_model$rowIndex <- seq(1,nrow(df_predictive_model),1)
+
+df_cv <- mod$pred %>%
+  left_join(df_predictive_model) %>%
+  dplyr::select(pred, obs, mission, village)
+
+plot_eval_abundance_model <- df_cv %>%
+  dplyr::group_by(mission,village) %>%   
+  dplyr::summarise(pred = mean(pred), obs = mean(obs)) %>%
+  as_tibble() %>%
+  pivot_longer(c('pred','obs')) %>%
+  mutate(name = ifelse(name=="pred","Predicted","Observed")) %>%
+  ggplot(aes(x=mission, y = value, color = name)) +
+  geom_point() + 
+  geom_line() + 
+  facet_wrap(.~village, scales = "free_y") + 
+  theme_bw() + 
+  scale_colour_manual(values=c("#009E73","#E69F00"),na.translate = F) + 
+  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8)) +
+  xlab("mission entomologique") +
+  ylab("Abondance des moustiques") + 
+  labs(color='Number of An. gambiae') + 
+  theme(legend.position="bottom") + 
+  ggtitle('Valeur observée vs. prédite par village et mission entomologique')
+
+plot_eval_abundance_model
+```
+
+Le modèle semble prédire correctement ! 
 
 # Pour aller plus loin 
 
+-> fouille de données 
 
 **License**
 
-<a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/"><img alt="Licence Creative Commons" style="border-width:0" src="https://i.creativecommons.org/l/by-nc/4.0/88x31.png" /></a><br />Ce(tte) œuvre est mise à disposition selon les termes de la <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/">Licence Creative Commons Attribution - Pas d’Utilisation Commerciale 4.0 International</a>.
+Cette œuvre est mise à disposition selon les termes de la [Licence Creative Commons Attribution - Pas d’Utilisation Commerciale 4.0 International](http://creativecommons.org/licenses/by-nc/4.0/).
 
 **Citation** 
 
